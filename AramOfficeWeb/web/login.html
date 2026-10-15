@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Aram Office – Staff Login</title><link rel="stylesheet" href="style.css"></head>
+<body class="login-bg">
+<form class="card login" id="f">
+  <div class="logo">🏛️</div>
+  <h1>Aram Office</h1>
+  <p class="muted">Document Portal · Staff Login</p>
+  <label>Username<input id="u" autocomplete="username" required autofocus></label>
+  <label>Password<input id="p" type="password" autocomplete="current-password" required></label>
+  <div id="err" class="err"></div><br>
+  <button class="btn" type="submit">Sign in</button>
+</form>
+<script>
+f.onsubmit = async e => {
+  e.preventDefault();
+  const r = await fetch('/api/login', {method:'POST', body:new URLSearchParams({username:u.value, password:p.value})});
+  if (r.ok) location.href = '/'; else err.textContent = (await r.json()).error;
+};
+</script></body></html>

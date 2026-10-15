@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Aram Office – Documents</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><b>🏛️ Aram Office · Document Portal</b><span><span id="who"></span><button class="btn ghost" onclick="logout()">Logout</button></span></header>
+<nav id="tabs"><button data-t="search" class="on">Search</button><button data-t="browse">All documents</button><button data-t="add">Add document</button><button data-t="tree">Categories</button><button data-t="tests">Test cases</button></nav>
+<main>
+<section id="search">
+  <div class="card"><input id="q" placeholder="Type keywords, e.g. form, refund" list="sg" autocomplete="off"><datalist id="sg"></datalist><button class="btn" onclick="doSearch()">Search</button></div>
+  <div id="results"></div>
+</section>
+<section id="browse" hidden>
+  <div class="card bar"><button class="btn" onclick="setOrder('asc')">Sort by ID ↑ Ascending</button><button class="btn" onclick="setOrder('desc')">Sort by ID ↓ Descending</button></div>
+  <div id="browseBox"></div>
+</section>
+<section id="add" hidden>
+  <form class="card grid" id="af">
+    <label>Document ID<input name="id" required placeholder="e.g. REV-FRM-101"></label>
+    <label>Department<select name="department"><option>Revenue</option><option>PublicWorks</option><option>Health</option><option>Administration</option></select></label>
+    <label>Category<select name="category"><option>Circular</option><option>ApplicationForm</option><option>ServiceInstruction</option><option>Notification</option><option>Guideline</option><option>Report</option></select></label>
+    <label>Importance (1-5)<input name="importance" type="number" min="1" max="5" value="3" required></label>
+    <label class="wide">Title<input name="title" required></label>
+    <label class="wide">Keywords (comma separated)<input name="keywords" required></label>
+    <p class="wide muted">Note: Keywords must include at least one word related to the chosen category (Circular: circular, notice, policy, update, office · ApplicationForm: form, application, request, citizen, submit · ServiceInstruction: service, instruction, process, staff, manual · Notification: notification, alert, deadline, schedule, public · Guideline: guideline, standard, procedure, compliance, rule · Report: report, summary, audit, review, annual). Application forms must include "form".</p>
+    <div id="amsg" class="wide"></div><button class="btn">Add document</button>
+  </form>
+</section>
+<section id="tree" hidden><div id="treeBox"></div></section>
+<section id="tests" hidden>
+  <div class="card"><button class="btn" onclick="runTests()">Run all test cases</button>
+  <p class="muted">Runs on a separate copy of the sample data, so your saved documents are not changed.</p></div>
+  <pre id="testOut" class="card"></pre>
+</section>
+</main>
+<div id="modal" hidden><div class="card dlg"><button class="x" onclick="modal.hidden=true">✕</button><div id="dd"></div></div></div>
+<script>
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function api(url, body) {
+  const r = await fetch(url, body ? {method:'POST', body:new URLSearchParams(body)} : {});
+  if (r.status === 401) { location.href = '/'; return; }
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error);
+  return d;
+}
+const table = rows => !rows.length ? '<p class="muted">No matching documents.</p>' :
+  `<table><tr><th>ID</th><th>Title</th><th>Department</th><th>Category</th><th>Importance</th><th>Ver.</th>${rows[0].matches ? '<th>Matches</th>' : ''}</tr>` +
+  rows.map(r => `<tr data-id="${esc(r.id)}"><td>${esc(r.id)}</td><td>${esc(r.title)}</td><td>${esc(r.department)}</td><td>${esc(r.category)}</td><td>${'★'.repeat(r.importance)}</td><td>v${r.version}</td>${r.matches ? `<td>${r.matches}</td>` : ''}</tr>`).join('') + '</table>';
+
+let cur = 'search', order = 'asc';
+function setOrder(o) { order = o; show('browse'); }
+async function runTests() { testOut.textContent = 'Running...'; testOut.textContent = (await api('/api/tests')).output; }
+function show(t) {
+  cur = t;
+  document.querySelectorAll('main section').forEach(s => s.hidden = s.id !== t);
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+  if (t === 'browse') api('/api/list?order=' + order).then(r => browseBox.innerHTML = table(r));
+  if (t === 'tree') api('/api/tree').then(t => treeBox.innerHTML = t.map(d => `<div class="card"><h3>${esc(d.name)}</h3>` + d.categories.map(c => `<div class="row"><span>${esc(c.name)}</span><b>${c.count}</b></div>`).join('') + '</div>').join(''));
+  if (t === 'search' && q.value.trim()) doSearch();
+}
+tabs.onclick = e => { if (e.target.dataset.t) show(e.target.dataset.t); };
+
+async function doSearch() {
+  if (!q.value.trim()) { results.innerHTML = ''; return; }
+  try { results.innerHTML = table(await api('/api/search?q=' + encodeURIComponent(q.value))); }
+  catch (e) { results.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+}
+q.onkeydown = e => { if (e.key === 'Enter') doSearch(); };
+q.oninput = async () => {            // prefix suggestions (Trie) for the word being typed
+  const parts = q.value.split(','), last = parts.pop().trim();
+  if (!last) { sg.innerHTML = ''; return; }
+  const words = await api('/api/suggest?prefix=' + encodeURIComponent(last));
+  const head = parts.length ? parts.join(',') + ', ' : '';
+  sg.innerHTML = words.map(w => `<option value="${esc(head + w)}">`).join('');
+};
+
+document.addEventListener('click', e => { const tr = e.target.closest('tr[data-id]'); if (tr) openDoc(tr.dataset.id); });
+async function openDoc(id) {
+  const d = await api('/api/doc?id=' + encodeURIComponent(id));
+  const c = d.versions.find(v => v.no === d.current);
+  dd.innerHTML = `<h2>${esc(d.id)} <small class="muted">${esc(d.type)} · ${esc(d.department)}</small></h2><h3>Version history</h3>` +
+    d.versions.map(v => `<div class="ver ${v.no === d.current ? 'cur' : ''}"><b>v${v.no}</b> ${v.no === d.current ? '<span class="badge">current</span>' : ''}<div>${esc(v.title)}</div><div class="muted">${esc(v.category)} · importance ${v.importance} · ${esc(v.keywords)}</div></div>`).join('') +
+    `<h3>Add new version</h3><form class="grid">
+      <label>Title<input name="title" value="${esc(c.title)}" required></label>
+      <label>Category<input name="category" value="${esc(c.category)}" required></label>
+      <label>Keywords<input name="keywords" value="${esc(c.keywords)}" required></label>
+      <label>Importance (1-5)<input name="importance" type="number" min="1" max="5" value="${c.importance}" required></label>
+      <div id="vmsg" class="err wide"></div><button class="btn">Save new version</button></form>`;
+  dd.querySelector('form').onsubmit = async e => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.target)); f.id = d.id;
+    try { await api('/api/version', f); await openDoc(d.id); show(cur); } catch (x) { vmsg.textContent = x.message; }
+  };
+  modal.hidden = false;
+}
+
+af.onsubmit = async e => {
+  e.preventDefault();
+  try {
+    const f = Object.fromEntries(new FormData(af));
+    await api('/api/add', f);
+    amsg.className = 'wide ok'; amsg.textContent = 'Document ' + f.id + ' added.'; af.reset();
+  } catch (x) { amsg.className = 'wide err'; amsg.textContent = x.message; }
+};
+async function logout() { await api('/api/logout', {x: 1}); location.href = '/'; }
+api('/api/me').then(m => who.textContent = m.name);
+</script></body></html>
