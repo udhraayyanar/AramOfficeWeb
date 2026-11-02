@@ -1,28 +1,33 @@
-ARAM OFFICE DOCUMENT PORTAL (web version)
+ARAM OFFICE DOCUMENT PORTAL (web version) - XAMPP MySQL edition
 
-1. Needs JDK (you already have it) and lib\sqlite-jdbc.jar
-   (if lib\ is empty, download sqlite-jdbc from
-    https://repo1.maven.org/maven2/org/xerial/sqlite-jdbc/3.46.1.3/sqlite-jdbc-3.46.1.3.jar
-    and save it as lib\sqlite-jdbc.jar)
-2. Double-click run.bat  (or: open cmd in this folder and run it)
-3. Open http://localhost:8080
+1. Needs: JDK, XAMPP, and the JDBC driver lib\mariadb-java-client-3.4.1.jar
+   run.bat downloads the driver automatically the first time (internet needed once).
+   If that fails, download it manually and save it in the lib folder:
+   https://repo1.maven.org/maven2/org/mariadb/jdbc/mariadb-java-client/3.4.1/mariadb-java-client-3.4.1.jar
+
+2. Start XAMPP Control Panel -> click Start next to MySQL (Apache is only needed for phpMyAdmin).
+
+3. Create the database (recommended):
+   open http://localhost/phpmyadmin -> Import -> Choose File -> aramoffice.sql -> Go
+   This creates the database "aramoffice" with tables users, documents, versions,
+   the two demo logins and the 48 synthetic documents.
+   (If you skip this step, the program creates the database and tables itself on first run.)
+
+4. Double-click run.bat, then open http://localhost:8080
 
 Demo staff logins:  admin / admin123   and   staff / staff123
 
-Database: aramoffice.db (SQLite, created on first run) with tables
-users, documents, versions. First run fills it with the 48 synthetic documents.
-Search, Trie, ranking and version logic are the same Java classes as the console app.
-To reset the data, stop the server and delete aramoffice.db.
+Connection settings (src\Db.java) - XAMPP defaults:
+   host localhost, port 3306, database aramoffice, user root, empty password.
+   If your MySQL root has a password or another port, either edit the constants at the top
+   of src\Db.java, or set environment variables ARAM_DB_HOST, ARAM_DB_PORT, ARAM_DB_NAME,
+   ARAM_DB_USER, ARAM_DB_PASS before running.
 
-NEW IN THIS VERSION
-- "All documents" tab: Sort by ID number ascending / descending.
-- "Test cases" tab: runs Tests 1-5 (no match, mixed-case prefix, new version replaces index terms
-  incl. old-keyword check, duplicate ID, ID ascending/descending). Uses a separate copy of the
-  sample data, so your saved documents are not changed.
-- src\TestRunner.java is the same file the console project uses: copy it into your console
-  project's src folder to get Test 5 there too (menu option 8).
-- Add a staff login:
+Reset the data: in phpMyAdmin drop the database "aramoffice" and import aramoffice.sql again.
+
+Add a staff login:
     javac -cp "lib/*" -d out src\*.java
-    java --enable-native-access=ALL-UNNAMED -cp "out;lib/*" AddUser <username> <password> "<Full Name>"
-- To keep your old users/documents, copy your old aramoffice.db into this folder before run.bat.
-- Prefix search is already included (type in the Search box for suggestions).
+    java -cp "out;lib/*" AddUser <username> <password> "<Full Name>"
+
+Other features (unchanged): All documents tab with ID sorting, Test cases tab (uses a separate
+in-memory copy of the sample data, so your database is not changed), prefix search suggestions.
